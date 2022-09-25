@@ -4,8 +4,11 @@ import javafx.event.ActionEvent;
 import javafx.fxml.Initializable;
 import javafx.scene.control.ListView;
 
-import java.io.File;
+import javax.net.ssl.SSLSocket;
+import java.io.*;
+import java.net.Socket;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ResourceBundle;
@@ -16,11 +19,47 @@ public class CloudMainController implements Initializable {
     public ListView<String> clientView;
 
     private String currentDirectory;
+    private DataOutputStream dos;
+    private DataInputStream dis;
+    private Socket socket;
+    private static final String SEND_FILE_COMMAND = "file";
+
+
     public void sendToServer(ActionEvent actionEvent) {
+        String fileName = clientView.getSelectionModel().getSelectedItem();
+        String filePath = currentDirectory + "/" + fileName;
+        File file = new File(filePath);
+        if (file.isFile()){
+            try {
+                dos.writeUTF(SEND_FILE_COMMAND);
+            dos.writeUTF(fileName);
+            dos.writeLong(file.length());
+            try (FileInputStream fis = new FileInputStream(file)){
+                byte[] bytes = fis.readAllBytes();
+                dos.write(bytes);
+            }
+            catch (IOException e){
+                throw  new RuntimeException(e);
+            }
+        }
+        catch (Exception e){
+             System.err.println("e = "+ e.getMessage());
+        }
+        }
     }
 
+    private void initNetwork(){
+        try {
+            Socket socket = new Socket("localhost", 8189);
+            dis = new DataInputStream(socket.getInputStream());
+            dos = new DataOutputStream(socket.getOutputStream());
+        }
+        catch (Exception ignored){
+        }
+    }
     @Override
     public void initialize(URL url, ResourceBundle resourceBundle) {
+        initNetwork();
         setCurrentDirectory(currentDirectory = System.getProperty("user.home"));
         fillView(clientView, getFiles(currentDirectory));
         clientView.setOnMouseClicked(event ->{
@@ -49,7 +88,9 @@ public class CloudMainController implements Initializable {
         if (dir.isDirectory()){
             String[] list = dir.list();
             if (list != null){
-             return Arrays.asList(list);
+                List<String> files = new ArrayList<>(Arrays.asList(list));
+                files.add(0, "..");
+             return files;
             }
         }
         return List.of();
